@@ -23,8 +23,6 @@ return [
                 'number', // columns
                 'link', // columns
                 'customInfo', // columns
-                'ajaxModal', // action
-                'modal', // action
             ],
             2 => [
                 'select', // filter
@@ -40,7 +38,11 @@ return [
                 'deleteFromRepo', // groupAction
                 'addInfo', // columns
                 'column' // sort
-            ]
+            ],
+            'label' => [
+                'ajaxModal', // action
+                'modal', // action
+            ],
         ],
         'Form' => [
             0 => [

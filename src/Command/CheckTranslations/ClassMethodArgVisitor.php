@@ -55,9 +55,9 @@ class ClassMethodArgVisitor extends NodeVisitorAbstract
                 if ($classNamePart !== 'ALL' && (strpos($this->className, $classNamePart) === false || substr($this->className, -strlen($classNamePart)) !== $classNamePart)) {
                     continue;
                 }
-                foreach ($argposMethods as $argIndex => $methods) {
+                foreach ($argposMethods as $argSelector => $methods) {
                     if (in_array($methodName, $methods, true)) {
-                        $this->extractKeyFromArgument($node, $argIndex, $classNamePart);
+                        $this->extractKeyFromArgument($node, is_numeric($argSelector) ? (int) $argSelector : $argSelector, $classNamePart);
                     }
                 }
             }
@@ -79,15 +79,21 @@ class ClassMethodArgVisitor extends NodeVisitorAbstract
         }
     }
 
-    private function extractKeyFromArgument(MethodCall $node, int $argIndex, string $classNamePart): void
+    private function extractKeyFromArgument(MethodCall $node, int|string $argSelector, string $classNamePart): void
     {
         $args = $node->args;
+        $selectedArg = $this->findArgumentBySelector($args, $argSelector);
+
+        if ($selectedArg === null) {
+            return;
+        }
+
         // find in funciton return array values
-        if (isset($args[$argIndex]) && $args[$argIndex]->value instanceof Closure &&
-            isset($args[$argIndex]->value) && isset($args[$argIndex]->value)
+        if ($selectedArg->value instanceof Closure &&
+            isset($selectedArg->value) && isset($selectedArg->value)
         ) {
             $method = $node->name->name;
-            $closure = $args[$argIndex]->value;
+            $closure = $selectedArg->value;
             if ($closure->stmts !== null) {
                 $return = reset($closure->stmts);
                 if ($return instanceof Return_ && $return->expr instanceof Array_ && $return->expr->items !== null) {
@@ -102,28 +108,46 @@ class ClassMethodArgVisitor extends NodeVisitorAbstract
             }
         }
 
-        if (isset($args[$argIndex]) && $args[$argIndex]->value instanceof String_) {
+        if ($selectedArg->value instanceof String_) {
             $method = $node->name->name;
             $arg = null;
-            if ($method === 'translate' && isset($args[$argIndex + 1]) && $args[$argIndex + 1]->value instanceof Node\Expr\Array_) {
-                $arg = $args[$argIndex + 1]->value->items[0]->key->value;
+            if (is_int($argSelector) && $method === 'translate' && isset($args[$argSelector + 1]) && $args[$argSelector + 1]->value instanceof Node\Expr\Array_) {
+                $arg = $args[$argSelector + 1]->value->items[0]->key->value;
             }
 
-            $key = $args[$argIndex]->value->value;
+            $key = $selectedArg->value->value;
             $allowEmptyTranslation = $this->config['ALLOW_EMPTY_TRANSLATION'] ?? [];
             if (
                 array_key_exists($classNamePart, $allowEmptyTranslation) &&
-                array_key_exists($argIndex, $allowEmptyTranslation[$classNamePart]) &&
+                array_key_exists($argSelector, $allowEmptyTranslation[$classNamePart]) &&
                 ($key === '' || $key === '--') &&
-                (in_array($method, $allowEmptyTranslation[$classNamePart][$argIndex], true))
+                (in_array($method, $allowEmptyTranslation[$classNamePart][$argSelector], true))
             ) {
                 return;
             }
-            $this->addKey($args[$argIndex]->getStartLine(), $method, $key, $arg);
+            $this->addKey($selectedArg->getStartLine(), $method, $key, $arg);
         }
     }
 
-    private function addKey(int $line, string $call, string $key, string $arg = null): void
+    /**
+     * @param array<int, Node\Arg> $args
+     */
+    private function findArgumentBySelector(array $args, int|string $argSelector): ?Node\Arg
+    {
+        if (is_int($argSelector)) {
+            return $args[$argSelector] ?? null;
+        }
+
+        foreach ($args as $arg) {
+            if ($arg->name?->toString() === $argSelector) {
+                return $arg;
+            }
+        }
+
+        return null;
+    }
+
+    private function addKey(int $line, string $call, string $key, ?string $arg = null): void
     {
         $this->keys[] = [
             'file' => $this->filePath,
