@@ -2,7 +2,6 @@
 
 namespace Efabrica\TranslationsAutomatization\Command\CheckTranslations;
 
-
 use Efabrica\TranslationsAutomatization\Command\CheckFormKeys\ClassMethodArgVisitor;
 use Exception;
 use PhpParser\NodeTraverser;
@@ -13,14 +12,14 @@ use SplFileInfo;
 
 class CodeAnalyzer
 {
-    private $directories;
+    private array $directories;
 
-    private $translationFindConfig;
+    private LatteTranslationAnalyzer $latteTranslationAnalyzer;
 
-    public function __construct(array $directories, array $translationFindConfig)
+    public function __construct(array $directories, ?LatteTranslationAnalyzer $latteTranslationAnalyzer = null)
     {
         $this->directories = $directories;
-        $this->translationFindConfig = $translationFindConfig;
+        $this->latteTranslationAnalyzer = $latteTranslationAnalyzer ?? new LatteTranslationAnalyzer();
     }
 
     public function analyzeDirectories(): array
@@ -56,20 +55,7 @@ class CodeAnalyzer
 
     private function findInLatte(SplFileInfo $file): array
     {
-        $translateCalls = [];
-        $regex = "/\{_'[^']*'\}/";
-        $content = file_get_contents($file->getPathname());
-        if (preg_match_all($regex, $content, $matches)) {
-            $lines = file($file->getPathname());
-            foreach ($matches[0] as $match) {
-                foreach ($lines as $lineNumber => $lineContent) {
-                    if (strpos($lineContent, $match) !== false) {
-                        $translateCalls[] = ['key' => substr($match, 3, -2), 'file' => $file->getPathname(), 'line' => $lineNumber + 1, 'method' => 'in_latte'];
-                    }
-                }
-            }
-        }
-        return $translateCalls;
+        return $this->latteTranslationAnalyzer->analyze($file);
     }
 
     private function analyzeCode(string $code, string $filePath): array
@@ -78,7 +64,7 @@ class CodeAnalyzer
         $traverser = new NodeTraverser();
         $result = [];
 
-        $traverser->addVisitor(new ClassMethodArgVisitor($result, $filePath, $this->translationFindConfig));
+        $traverser->addVisitor(new ClassMethodArgVisitor($result, $filePath, new TranslationKeyExpressionResolver()));
 
         try {
             $ast = $parser->parse($code);
