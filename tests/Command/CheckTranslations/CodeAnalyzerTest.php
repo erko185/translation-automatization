@@ -35,6 +35,7 @@ class CodeAnalyzerTest extends TestCase
         $this->assertContains('ebox.in_app_rating.title.modal', $resolvedKeys);
         $this->assertContains('interprocedural.published', $resolvedKeys);
         $this->assertContains('local.prefix.title', $resolvedKeys);
+        $this->assertContains('dictionary.configs.add_missing_configs', $resolvedKeys);
         $this->assertContains('property.fetch.title', $resolvedKeys);
         $this->assertContains('program.template.title', $resolvedKeys);
         $this->assertContains('latte.dynamic.key', $resolvedKeys);

@@ -10,6 +10,10 @@ class LatteTranslationExpressionResolver
     public function resolve(string $expression, array $variables = []): ExpressionEvaluationResult
     {
         $expression = $this->extractTranslationKeyExpression($expression);
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_.-]*$/', $expression) === 1) {
+            return ExpressionEvaluationResult::resolved([$expression], false, ['latte_expression']);
+        }
+
         $segments = $this->splitByConcatenation($expression);
         if ($segments === null) {
             return ExpressionEvaluationResult::unresolved(true, ['latte_expression']);
@@ -148,6 +152,10 @@ class LatteTranslationExpressionResolver
 
         if (preg_match('/^\$([A-Za-z_][A-Za-z0-9_]*)$/', $segment, $match) === 1 && isset($variables[$match[1]])) {
             return ['value' => $variables[$match[1]], 'dynamic' => true];
+        }
+
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_.-]*$/', $segment) === 1) {
+            return ['value' => $segment, 'dynamic' => false];
         }
 
         return null;

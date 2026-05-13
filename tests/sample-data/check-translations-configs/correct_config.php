@@ -13,6 +13,7 @@ return new CheckDictionariesConfig([
         'feed.condition.option.b' => 'Condition B %count%',
         'interprocedural.published' => 'Published %count%',
         'local.prefix.title' => 'Local prefix %count%',
+        'dictionary.configs.add_missing_configs' => 'Add missing configs %count%',
         'property.fetch.title' => 'Property fetch %count%',
         'program.template.title' => 'Program template %count%',
         'latte.dynamic.key' => 'Latte %count%',
