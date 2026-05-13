@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class CheckTranslationsCommand extends Command
@@ -17,7 +18,8 @@ class CheckTranslationsCommand extends Command
         $this->setName('check:translations')
             ->setDescription('Compare all translation keys with dictionaries(from files or api) for languages(default en_US)')
             ->addArgument('config', InputArgument::REQUIRED, 'Path to config file. Instance of ' . CheckDictionariesConfig::class . ' have to be returned')
-            ->addOption('params', null, \Symfony\Component\Console\Input\InputOption::VALUE_REQUIRED, 'Params for config in format --params="a=b&c=d"');
+            ->addOption('params', null, InputOption::VALUE_REQUIRED, 'Params for config in format --params="a=b&c=d"')
+            ->addOption('hide-dynamic-warnings', null, InputOption::VALUE_NONE, 'Do not print unresolved dynamic translation warnings');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)
@@ -38,11 +40,12 @@ class CheckTranslationsCommand extends Command
 
         $output->writeln('');
         $output->writeln('Loading dictionaries...');
-
         $dictionaries = $checkDictionariesConfig->load();
+
         $onlyOneLang = (count($dictionaries) === 1);
         $errors = [];
         $warnings = [];
+        $hideDynamicWarnings = (bool) $input->getOption('hide-dynamic-warnings');
         $dirs = ['./app', './src'];
 
         $results = (new CodeAnalyzer($dirs))->analyzeDirectories();
@@ -51,8 +54,12 @@ class CheckTranslationsCommand extends Command
             'resolvedStatic' => 0,
             'resolvedDynamic' => 0,
             'unresolvedDynamic' => 0,
-            'strategies' => [],
-            'variables' => [],
+            'unresolvedStrategies' => [],
+            'unresolvedStrategyExamples' => [],
+            'unresolvedVariables' => [],
+            'unresolvedVariableExamples' => [],
+            'unresolvedFiles' => [],
+            'unresolvedFileExamples' => [],
         ];
         foreach ($results as $call) {
             $this->collectStatistics($statistics, $call);
@@ -126,8 +133,10 @@ class CheckTranslationsCommand extends Command
         foreach (array_unique($errors) as $error) {
             $output->writeln($error, OutputInterface::VERBOSITY_VERY_VERBOSE);
         }
-        foreach (array_unique($warnings) as $warning) {
-            $output->writeln($warning, OutputInterface::VERBOSITY_VERY_VERBOSE);
+        if (!$hideDynamicWarnings) {
+            foreach (array_unique($warnings) as $warning) {
+                $output->writeln($warning, OutputInterface::VERBOSITY_VERY_VERBOSE);
+            }
         }
         $this->writeStatistics($output, $statistics);
 
@@ -147,47 +156,182 @@ class CheckTranslationsCommand extends Command
             $statistics['resolvedStatic']++;
         }
 
-        foreach ($call['resolutionStrategies'] ?? [] as $strategy) {
-            if (!isset($statistics['strategies'][$strategy])) {
-                $statistics['strategies'][$strategy] = 0;
+        if (($call['isResolved'] ?? true) === false) {
+            $this->incrementGroupedStatistic($statistics['unresolvedFiles'], $statistics['unresolvedFileExamples'], (string) ($call['file'] ?? 'unknown'), $call, true);
+
+            foreach ($call['resolutionStrategies'] ?? [] as $strategy) {
+                $this->incrementGroupedStatistic($statistics['unresolvedStrategies'], $statistics['unresolvedStrategyExamples'], $strategy, $call);
             }
 
-            $statistics['strategies'][$strategy]++;
-        }
-
-        foreach ($call['variablesUsed'] ?? [] as $variable) {
-            if (!isset($statistics['variables'][$variable])) {
-                $statistics['variables'][$variable] = 0;
+            foreach ($call['variablesUsed'] ?? [] as $variable) {
+                $this->incrementGroupedStatistic($statistics['unresolvedVariables'], $statistics['unresolvedVariableExamples'], $variable, $call);
             }
 
-            $statistics['variables'][$variable]++;
+            return;
         }
+
     }
 
     private function writeStatistics(OutputInterface $output, array $statistics): void
     {
+        $resolvedTotal = $statistics['resolvedStatic'] + $statistics['resolvedDynamic'];
+        $resolutionRate = $statistics['callsTotal'] > 0 ? ($resolvedTotal / $statistics['callsTotal']) * 100 : 0.0;
+        $dynamicResolutionRate = ($statistics['resolvedDynamic'] + $statistics['unresolvedDynamic']) > 0
+            ? ($statistics['resolvedDynamic'] / ($statistics['resolvedDynamic'] + $statistics['unresolvedDynamic'])) * 100
+            : 0.0;
+
         $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
-        $output->writeln('Analysis statistics:', OutputInterface::VERBOSITY_VERBOSE);
-        $output->writeln(sprintf('  calls total: %d', $statistics['callsTotal']), OutputInterface::VERBOSITY_VERBOSE);
-        $output->writeln(sprintf('  resolved static: %d', $statistics['resolvedStatic']), OutputInterface::VERBOSITY_VERBOSE);
-        $output->writeln(sprintf('  resolved dynamic: %d', $statistics['resolvedDynamic']), OutputInterface::VERBOSITY_VERBOSE);
-        $output->writeln(sprintf('  unresolved dynamic: %d', $statistics['unresolvedDynamic']), OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('==================== Analysis Statistics ====================', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('[Overview]', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln(sprintf('  Total calls              %6d', $statistics['callsTotal']), OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln(sprintf('  Resolved total           %6d   %s', $resolvedTotal, $this->renderPercentBar($resolutionRate)), OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln(sprintf('  Resolved static          %6d', $statistics['resolvedStatic']), OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln(sprintf('  Resolved dynamic         %6d', $statistics['resolvedDynamic']), OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln(sprintf('  Unresolved dynamic       %6d', $statistics['unresolvedDynamic']), OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln(sprintf('  Dynamic success rate     %6.1f%%   %s', $dynamicResolutionRate, $this->renderPercentBar($dynamicResolutionRate)), OutputInterface::VERBOSITY_VERBOSE);
 
-        if ($statistics['strategies'] !== []) {
-            arsort($statistics['strategies']);
-            $output->writeln('  strategies:', OutputInterface::VERBOSITY_VERBOSE);
-            foreach ($statistics['strategies'] as $strategy => $count) {
-                $output->writeln(sprintf('    %s: %d', $strategy, $count), OutputInterface::VERBOSITY_VERBOSE);
+        $this->writeGroupedStatistics(
+            $output,
+            '[What Fails: Unresolved Dynamic Blockers]',
+            $statistics['unresolvedStrategies'],
+            $statistics['unresolvedStrategyExamples']
+        );
+
+        $this->writeGroupedStatistics(
+            $output,
+            '[Variables Behind Unresolved Cases]',
+            $statistics['unresolvedVariables'],
+            $statistics['unresolvedVariableExamples']
+        );
+
+        $this->writeGroupedStatistics(
+            $output,
+            '[Top Files With Unresolved Dynamic Keys]',
+            $statistics['unresolvedFiles'],
+            $statistics['unresolvedFileExamples'],
+            true
+        );
+        $output->writeln('=============================================================', OutputInterface::VERBOSITY_VERBOSE);
+    }
+
+    private function writeGroupedStatistics(OutputInterface $output, string $title, array $counts, array $examples, bool $fileMode = false): void
+    {
+        if ($counts === []) {
+            return;
+        }
+
+        arsort($counts);
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln($title, OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('  ----------------------------------------------------------', OutputInterface::VERBOSITY_VERBOSE);
+
+        $index = 0;
+        foreach ($counts as $label => $count) {
+            $index++;
+            if ($index > 10) {
+                break;
+            }
+
+            $lineLabel = $fileMode ? $this->shortenPath($label) : $label;
+            $output->writeln(sprintf(
+                '  %2d. %-32s %6d%s',
+                $index,
+                $this->truncateLabel($lineLabel, 32),
+                $count,
+                $this->formatStatisticExample($examples[$label] ?? null)
+            ), OutputInterface::VERBOSITY_VERBOSE);
+        }
+    }
+
+    private function incrementGroupedStatistic(array &$counts, array &$examples, string $key, array $call, bool $preferFileExample = false): void
+    {
+        if (!isset($counts[$key])) {
+            $counts[$key] = 0;
+        }
+
+        $counts[$key]++;
+        if (!isset($examples[$key])) {
+            $examples[$key] = $this->buildStatisticExample($call, $key, $preferFileExample);
+        }
+    }
+
+    private function buildStatisticExample(array $call, string $label, bool $preferFileExample = false): string
+    {
+        if ($preferFileExample) {
+            return sprintf(
+                '%s:%s%s',
+                $this->shortenPath((string) ($call['file'] ?? 'unknown')),
+                $call['line'] ?? '?',
+                isset($call['sourceExpression']) && is_string($call['sourceExpression']) && $call['sourceExpression'] !== ''
+                    ? ' -> ' . $call['sourceExpression']
+                    : ''
+            );
+        }
+
+        $expression = $call['sourceExpression'] ?? null;
+        if (!is_string($expression) || $expression === '') {
+            $resolvedKey = $call['resolvedKeys'][0] ?? null;
+            if (is_string($resolvedKey) && $resolvedKey !== '') {
+                $expression = $resolvedKey;
             }
         }
 
-        if ($statistics['variables'] !== []) {
-            arsort($statistics['variables']);
-            $output->writeln('  variables used in dynamic resolution:', OutputInterface::VERBOSITY_VERBOSE);
-            foreach ($statistics['variables'] as $variable => $count) {
-                $output->writeln(sprintf('    %s: %d', $variable, $count), OutputInterface::VERBOSITY_VERBOSE);
-            }
+        if (!is_string($expression) || $expression === '') {
+            $expression = $call['call'] ?? $label;
         }
+
+        return sprintf(
+            '%s in %s:%s',
+            $expression,
+            $this->shortenPath((string) ($call['file'] ?? 'unknown')),
+            $call['line'] ?? '?'
+        );
+    }
+
+    private function formatStatisticExample(?string $example): string
+    {
+        if ($example === null || $example === '') {
+            return '';
+        }
+
+        return sprintf("\n      example: %s", $example);
+    }
+
+    private function shortenPath(string $path): string
+    {
+        if (str_starts_with($path, './')) {
+            return $path;
+        }
+
+        $appPosition = strpos($path, '/app/');
+        if ($appPosition !== false) {
+            return '.' . substr($path, $appPosition);
+        }
+
+        $srcPosition = strpos($path, '/src/');
+        if ($srcPosition !== false) {
+            return '.' . substr($path, $srcPosition);
+        }
+
+        return $path;
+    }
+
+    private function truncateLabel(string $label, int $maxLength): string
+    {
+        if (strlen($label) <= $maxLength) {
+            return $label;
+        }
+
+        return substr($label, 0, $maxLength - 3) . '...';
+    }
+
+    private function renderPercentBar(float $percent): string
+    {
+        $normalizedPercent = max(0.0, min(100.0, $percent));
+        $filled = (int) round($normalizedPercent / 10);
+        $empty = 10 - $filled;
+
+        return sprintf('[%s%s] %5.1f%%', str_repeat('#', $filled), str_repeat('.', $empty), $normalizedPercent);
     }
 
     private function formatStrategiesSuffix(array $strategies): string

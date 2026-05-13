@@ -13,6 +13,10 @@ class TranslationKeyExpressionResolver
     /** @var array<string, ExpressionEvaluationResult> */
     private array $classConstants = [];
 
+    private ?ProjectClassIndex $classIndex = null;
+
+    private ?string $currentClassName = null;
+
     public function __construct(int $combinationLimit = 25)
     {
         $this->combinationLimit = $combinationLimit;
@@ -25,6 +29,15 @@ class TranslationKeyExpressionResolver
     {
         $clone = clone $this;
         $clone->classConstants = $classConstants;
+
+        return $clone;
+    }
+
+    public function withClassContext(ProjectClassIndex $classIndex, ?string $currentClassName): self
+    {
+        $clone = clone $this;
+        $clone->classIndex = $classIndex;
+        $clone->currentClassName = $currentClassName;
 
         return $clone;
     }
@@ -54,6 +67,14 @@ class TranslationKeyExpressionResolver
 
         if ($expression instanceof Expr\Array_) {
             return $this->resolveArrayExpression($expression, $scope);
+        }
+
+        if ($expression instanceof Expr\ArrayDimFetch) {
+            return $this->resolveArrayDimFetch($expression, $scope);
+        }
+
+        if ($expression instanceof Expr\PropertyFetch) {
+            return $this->resolvePropertyFetch($expression, $scope);
         }
 
         if ($expression instanceof Expr\BinaryOp\Concat) {
@@ -102,6 +123,10 @@ class TranslationKeyExpressionResolver
             return $this->resolveFunctionCall($expression, $scope);
         }
 
+        if ($expression instanceof Expr\New_) {
+            return $this->resolveNewExpression($expression, $scope);
+        }
+
         if ($expression instanceof Expr\MethodCall) {
             return $this->resolveMethodCall($expression, $scope);
         }
@@ -120,6 +145,17 @@ class TranslationKeyExpressionResolver
         }
 
         $constantName = $expression->name->toString();
+        $resolvedClassName = $this->resolveClassConstOwner($expression);
+        if ($resolvedClassName !== null && $this->classIndex !== null) {
+            $constantValue = $this->classIndex->findConstantValue($resolvedClassName, $constantName);
+            if ($constantValue !== null) {
+                return $constantValue
+                    ->asDynamic()
+                    ->withStrategy('class_constant_fetch')
+                    ->withVariable($resolvedClassName . '::' . $constantName);
+            }
+        }
+
         if (!isset($this->classConstants[$constantName])) {
             return ExpressionEvaluationResult::unresolved(true, ['unknown_class_constant:' . $constantName]);
         }
@@ -130,18 +166,43 @@ class TranslationKeyExpressionResolver
             ->withVariable('self::' . $constantName);
     }
 
+    private function resolveClassConstOwner(Expr\ClassConstFetch $expression): ?string
+    {
+        if (!$expression->class instanceof Name) {
+            return $this->currentClassName;
+        }
+
+        $className = $expression->class->toString();
+        $normalizedClassName = strtolower($className);
+        if (in_array($normalizedClassName, ['self', 'static'], true)) {
+            return $this->currentClassName;
+        }
+
+        if ($normalizedClassName === 'parent') {
+            if ($this->classIndex === null || $this->currentClassName === null) {
+                return null;
+            }
+
+            return $this->classIndex->findParentClassName($this->currentClassName);
+        }
+
+        return $className;
+    }
+
     /**
      * @param array<string, ExpressionEvaluationResult> $scope
      */
     private function resolveArrayExpression(Expr\Array_ $expression, array $scope): ExpressionEvaluationResult
     {
         if ($expression->items === null) {
-            return ExpressionEvaluationResult::resolved([], true, ['array_literal']);
+            return ExpressionEvaluationResult::resolvedArray([], [], true, ['array_literal']);
         }
 
         $values = [];
+        $arrayItems = [];
         $strategies = ['array_literal'];
         $variablesUsed = [];
+        $nextIndex = 0;
         foreach ($expression->items as $item) {
             if ($item === null) {
                 continue;
@@ -159,6 +220,12 @@ class TranslationKeyExpressionResolver
             $values = array_merge($values, $itemResult->getValues());
             $strategies = array_merge($strategies, $itemResult->getStrategies());
             $variablesUsed = array_merge($variablesUsed, $itemResult->getVariablesUsed());
+            $resolvedKey = $this->resolveArrayItemKey($item->key, $scope, $nextIndex);
+            if ($resolvedKey !== null) {
+                $arrayItems[$resolvedKey] = $itemResult;
+            }
+
+            $nextIndex++;
             if (count($values) > $this->combinationLimit) {
                 return ExpressionEvaluationResult::unresolved(
                     true,
@@ -168,7 +235,88 @@ class TranslationKeyExpressionResolver
             }
         }
 
-        return ExpressionEvaluationResult::resolved($values, true, $strategies, $variablesUsed);
+        return ExpressionEvaluationResult::resolvedArray($values, $arrayItems, true, $strategies, $variablesUsed);
+    }
+
+    /**
+     * @param array<string, ExpressionEvaluationResult> $scope
+     */
+    private function resolveArrayDimFetch(Expr\ArrayDimFetch $expression, array $scope): ExpressionEvaluationResult
+    {
+        if ($expression->dim === null) {
+            return ExpressionEvaluationResult::unresolved(true, ['array_dim_fetch']);
+        }
+
+        $arrayResult = $this->resolve($expression->var, $scope);
+        $keyResult = $this->resolveArrayDimKey($expression->dim, $scope);
+        if ($keyResult === null) {
+            return ExpressionEvaluationResult::unresolved(
+                true,
+                array_merge($arrayResult->getStrategies(), ['array_dim_fetch']),
+                $arrayResult->getVariablesUsed()
+            );
+        }
+
+        if (!$arrayResult->isResolved() || !$arrayResult->hasArrayItems()) {
+            return ExpressionEvaluationResult::unresolved(
+                true,
+                array_merge($arrayResult->getStrategies(), $keyResult->getStrategies(), ['array_dim_fetch']),
+                array_merge($arrayResult->getVariablesUsed(), $keyResult->getVariablesUsed())
+            );
+        }
+
+        if (count($keyResult->getValues()) !== 1) {
+            return ExpressionEvaluationResult::unresolved(
+                true,
+                array_merge($arrayResult->getStrategies(), $keyResult->getStrategies(), ['array_dim_fetch']),
+                array_merge($arrayResult->getVariablesUsed(), $keyResult->getVariablesUsed())
+            );
+        }
+
+        $itemResult = $arrayResult->getArrayItem((string) $keyResult->getValues()[0]);
+        if ($itemResult === null) {
+            return ExpressionEvaluationResult::unresolved(
+                true,
+                array_merge($arrayResult->getStrategies(), $keyResult->getStrategies(), ['array_dim_fetch', 'unknown_array_key']),
+                array_merge($arrayResult->getVariablesUsed(), $keyResult->getVariablesUsed())
+            );
+        }
+
+        return $itemResult
+            ->asDynamic()
+            ->withStrategy('array_dim_fetch');
+    }
+
+    /**
+     * @param array<string, ExpressionEvaluationResult> $scope
+     */
+    private function resolvePropertyFetch(Expr\PropertyFetch $expression, array $scope): ExpressionEvaluationResult
+    {
+        if (!$expression->name instanceof Node\Identifier) {
+            return ExpressionEvaluationResult::unresolved(true, ['property_fetch']);
+        }
+
+        $objectResult = $this->resolve($expression->var, $scope);
+        if (!$objectResult->hasObjectProperties()) {
+            return ExpressionEvaluationResult::unresolved(
+                true,
+                array_merge($objectResult->getStrategies(), ['property_fetch']),
+                $objectResult->getVariablesUsed()
+            );
+        }
+
+        $propertyResult = $objectResult->getObjectProperty($expression->name->toString());
+        if ($propertyResult === null) {
+            return ExpressionEvaluationResult::unresolved(
+                true,
+                array_merge($objectResult->getStrategies(), ['property_fetch', 'unknown_property']),
+                $objectResult->getVariablesUsed()
+            );
+        }
+
+        return $propertyResult
+            ->asDynamic()
+            ->withStrategy('property_fetch');
     }
 
     /**
@@ -216,6 +364,50 @@ class TranslationKeyExpressionResolver
     /**
      * @param array<string, ExpressionEvaluationResult> $scope
      */
+    private function resolveNewExpression(Expr\New_ $expression, array $scope): ExpressionEvaluationResult
+    {
+        if (!$expression->class instanceof Name) {
+            return ExpressionEvaluationResult::unresolved(true, ['new_object']);
+        }
+
+        $className = $expression->class->toString();
+        $constructor = $this->classIndex?->findMethod($className, '__construct');
+        $parameterNames = $constructor?->parameterNames ?? [];
+
+        $objectProperties = [];
+        foreach ($expression->args as $index => $argument) {
+            if (!$argument instanceof Node\Arg) {
+                continue;
+            }
+
+            $propertyName = $argument->name?->toString() ?? ($parameterNames[$index] ?? null);
+            if (!is_string($propertyName) || $propertyName === '') {
+                continue;
+            }
+
+            $objectProperties[$propertyName] = $this->resolve($argument->value, $scope);
+        }
+
+        if ($objectProperties === []) {
+            return ExpressionEvaluationResult::unresolved(true, ['new_object']);
+        }
+
+        $variablesUsed = [];
+        foreach ($objectProperties as $propertyResult) {
+            $variablesUsed = array_merge($variablesUsed, $propertyResult->getVariablesUsed());
+        }
+
+        return ExpressionEvaluationResult::resolvedObject(
+            $objectProperties,
+            true,
+            ['new_object'],
+            array_values(array_unique($variablesUsed))
+        );
+    }
+
+    /**
+     * @param array<string, ExpressionEvaluationResult> $scope
+     */
     private function resolveMethodCall(Expr\MethodCall $expression, array $scope): ExpressionEvaluationResult
     {
         if (!$expression->name instanceof Node\Identifier) {
@@ -223,7 +415,7 @@ class TranslationKeyExpressionResolver
         }
 
         $methodName = strtolower($expression->name->toString());
-        if (!in_array($methodName, ['translate', 'trans'], true)) {
+        if ($methodName !== 'translate') {
             return ExpressionEvaluationResult::unresolved(true, ['unsupported_method_call:' . $methodName]);
         }
 
@@ -240,7 +432,7 @@ class TranslationKeyExpressionResolver
         }
 
         $methodName = strtolower($expression->name->toString());
-        if (!in_array($methodName, ['translate', 'trans'], true)) {
+        if ($methodName !== 'translate') {
             return ExpressionEvaluationResult::unresolved(true, ['unsupported_static_call:' . $methodName]);
         }
 
@@ -356,5 +548,48 @@ class TranslationKeyExpressionResolver
         }
 
         return array_values(array_unique($variablesUsed));
+    }
+
+    /**
+     * @param array<string, ExpressionEvaluationResult> $scope
+     */
+    private function resolveArrayDimKey(Expr $expression, array $scope): ?ExpressionEvaluationResult
+    {
+        if ($expression instanceof Node\Scalar\String_) {
+            return ExpressionEvaluationResult::resolved([$expression->value], true, ['array_key_literal']);
+        }
+
+        if ($expression instanceof Node\Scalar\Int_) {
+            return ExpressionEvaluationResult::resolved([(string) $expression->value], true, ['array_key_literal']);
+        }
+
+        $result = $this->resolve($expression, $scope);
+
+        return $result->isResolved() ? $result : null;
+    }
+
+    /**
+     * @param array<string, ExpressionEvaluationResult> $scope
+     */
+    private function resolveArrayItemKey(?Expr $expression, array $scope, int $fallbackIndex): ?string
+    {
+        if ($expression === null) {
+            return (string) $fallbackIndex;
+        }
+
+        if ($expression instanceof Node\Scalar\String_) {
+            return $expression->value;
+        }
+
+        if ($expression instanceof Node\Scalar\Int_) {
+            return (string) $expression->value;
+        }
+
+        $result = $this->resolveArrayDimKey($expression, $scope);
+        if ($result === null || count($result->getValues()) !== 1) {
+            return null;
+        }
+
+        return (string) $result->getValues()[0];
     }
 }

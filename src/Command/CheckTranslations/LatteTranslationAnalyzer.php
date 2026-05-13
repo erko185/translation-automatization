@@ -22,42 +22,65 @@ class LatteTranslationAnalyzer
         foreach ($lines as $lineNumber => $lineContent) {
             $this->collectVariables($lineContent, $variables);
 
-            if (preg_match_all('/\{_\s*([^}]+)\}/', $lineContent, $matches) === false) {
+            if (preg_match_all('/\{_\s*([^}]+)\}/', $lineContent, $underscoreMatches) !== false) {
+                foreach ($underscoreMatches[1] as $expression) {
+                    $translateCalls = array_merge(
+                        $translateCalls,
+                        $this->buildTranslationCalls($file->getPathname(), $lineNumber + 1, trim($expression), $variables)
+                    );
+                }
+            }
+
+            if (preg_match_all('/\{[^}]*?((?:\'[^\']*\'|"[^"]*"|\$[A-Za-z_][A-Za-z0-9_]*)(?:\s*\.\s*(?:\'[^\']*\'|"[^"]*"|\$[A-Za-z_][A-Za-z0-9_]*))*)\s*\|\s*translate\b[^}]*\}/', $lineContent, $filterMatches) === false) {
                 continue;
             }
 
-            foreach ($matches[1] as $expression) {
-                $result = $this->expressionResolver->resolve(trim($expression), $variables);
-                if ($result->isResolved()) {
-                    foreach ($result->getValues() as $key) {
-                        $translateCalls[] = [
-                            'resolvedKeys' => [$key],
-                            'file' => $file->getPathname(),
-                            'line' => $lineNumber + 1,
-                            'call' => 'in_latte',
-                            'arg' => null,
-                            'isDynamic' => $result->isDynamic(),
-                            'isResolved' => true,
-                            'sourceExpression' => trim($expression),
-                        ];
-                    }
-                    continue;
-                }
-
-                $translateCalls[] = [
-                    'resolvedKeys' => [],
-                    'file' => $file->getPathname(),
-                    'line' => $lineNumber + 1,
-                    'call' => 'in_latte',
-                    'arg' => null,
-                    'isDynamic' => true,
-                    'isResolved' => false,
-                    'sourceExpression' => trim($expression),
-                ];
+            foreach ($filterMatches[1] as $expression) {
+                $translateCalls = array_merge(
+                    $translateCalls,
+                    $this->buildTranslationCalls($file->getPathname(), $lineNumber + 1, trim($expression), $variables)
+                );
             }
         }
 
         return $translateCalls;
+    }
+
+    /**
+     * @param array<string, string> $variables
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildTranslationCalls(string $filePath, int $lineNumber, string $expression, array $variables): array
+    {
+        $result = $this->expressionResolver->resolve($expression, $variables);
+        if ($result->isResolved()) {
+            $translateCalls = [];
+            foreach ($result->getValues() as $key) {
+                $translateCalls[] = [
+                    'resolvedKeys' => [$key],
+                    'file' => $filePath,
+                    'line' => $lineNumber,
+                    'call' => 'in_latte',
+                    'arg' => null,
+                    'isDynamic' => $result->isDynamic(),
+                    'isResolved' => true,
+                    'sourceExpression' => $expression,
+                ];
+            }
+
+            return $translateCalls;
+        }
+
+        return [[
+            'resolvedKeys' => [],
+            'file' => $filePath,
+            'line' => $lineNumber,
+            'call' => 'in_latte',
+            'arg' => null,
+            'isDynamic' => true,
+            'isResolved' => false,
+            'sourceExpression' => $expression,
+        ]];
     }
 
     /**
