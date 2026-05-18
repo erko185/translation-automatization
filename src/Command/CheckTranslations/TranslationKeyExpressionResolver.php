@@ -371,8 +371,8 @@ class TranslationKeyExpressionResolver
         }
 
         $className = $expression->class->toString();
-        $constructor = $this->classIndex?->findMethod($className, '__construct');
-        $parameterNames = $constructor?->parameterNames ?? [];
+        $constructor = $this->classIndex !== null ? $this->classIndex->findMethod($className, '__construct') : null;
+        $parameterNames = $constructor !== null ? $constructor->parameterNames : [];
 
         $objectProperties = [];
         foreach ($expression->args as $index => $argument) {
@@ -380,7 +380,9 @@ class TranslationKeyExpressionResolver
                 continue;
             }
 
-            $propertyName = $argument->name?->toString() ?? ($parameterNames[$index] ?? null);
+            $propertyName = $argument->name !== null
+                ? $argument->name->toString()
+                : ($parameterNames[$index] ?? null);
             if (!is_string($propertyName) || $propertyName === '') {
                 continue;
             }

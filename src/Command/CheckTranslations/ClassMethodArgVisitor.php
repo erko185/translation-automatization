@@ -108,7 +108,7 @@ class ClassMethodArgVisitor extends NodeVisitorAbstract
     /**
      * @param array<int, Node\Arg|Node\VariadicPlaceholder> $args
      */
-    private function findArgumentBySelector(array $args, int|string $argSelector): ?Arg
+    private function findArgumentBySelector(array $args, $argSelector): ?Arg
     {
         if (is_int($argSelector)) {
             $arg = $args[$argSelector] ?? null;
@@ -121,7 +121,7 @@ class ClassMethodArgVisitor extends NodeVisitorAbstract
                 continue;
             }
 
-            if ($arg->name?->toString() === $argSelector) {
+            if ($arg->name !== null && $arg->name->toString() === $argSelector) {
                 return $arg;
             }
         }
@@ -348,7 +348,9 @@ class ClassMethodArgVisitor extends NodeVisitorAbstract
                 return null;
             }
 
-            return $this->classIndex->findMethod($className, $expression->name->toString())?->returnType;
+            $method = $this->classIndex->findMethod($className, $expression->name->toString());
+
+            return $method !== null ? $method->returnType : null;
         }
 
         if ($expression instanceof Node\Expr\StaticCall && $expression->name instanceof Node\Identifier) {
@@ -357,7 +359,9 @@ class ClassMethodArgVisitor extends NodeVisitorAbstract
                 return null;
             }
 
-            return $this->classIndex->findMethod($className, $expression->name->toString())?->returnType;
+            $method = $this->classIndex->findMethod($className, $expression->name->toString());
+
+            return $method !== null ? $method->returnType : null;
         }
 
         if ($expression instanceof Node\Expr\Variable && is_string($expression->name)) {
@@ -406,7 +410,7 @@ class ClassMethodArgVisitor extends NodeVisitorAbstract
         }
 
         $firstItem = $arg->value->items[0] ?? null;
-        if (!$firstItem?->key instanceof String_) {
+        if ($firstItem === null || !$firstItem->key instanceof String_) {
             return null;
         }
 

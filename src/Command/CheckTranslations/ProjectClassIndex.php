@@ -48,12 +48,14 @@ class ProjectClassIndex
     {
         $class = $this->findClass($className);
 
-        return $class?->constantValues ?? [];
+        return $class !== null ? $class->constantValues : [];
     }
 
     public function findParentClassName(string $className): ?string
     {
-        return $this->findClass($className)?->parentClassName;
+        $class = $this->findClass($className);
+
+        return $class !== null ? $class->parentClassName : null;
     }
 
     public function findConstantValue(string $className, string $constantName): ?ExpressionEvaluationResult
@@ -129,9 +131,10 @@ class ProjectClassIndex
     private static function collectClasses(self $index, Node $node): void
     {
         if ($node instanceof Class_) {
-            $className = $node->name?->toString();
+            $className = $node->name !== null ? $node->name->toString() : null;
             if ($className !== null) {
-                $classDefinition = new ProjectClassDefinition($className, $node->extends?->toString());
+                $parentClassName = $node->extends !== null ? $node->extends->toString() : null;
+                $classDefinition = new ProjectClassDefinition($className, $parentClassName);
                 foreach ($node->stmts as $statement) {
                     if ($statement instanceof Node\Stmt\ClassConst) {
                         foreach ($statement->consts as $const) {

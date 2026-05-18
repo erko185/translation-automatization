@@ -103,7 +103,7 @@ class MethodSummaryResolver
                 $pluralKey = null;
                 if ($secondArgumentValue instanceof Expr\Array_) {
                     $firstItem = $secondArgumentValue->items[0] ?? null;
-                    if ($firstItem?->key instanceof Node\Scalar\String_) {
+                    if ($firstItem !== null && $firstItem->key instanceof Node\Scalar\String_) {
                         $pluralKey = $firstItem->key->value;
                     }
                 }
@@ -126,7 +126,7 @@ class MethodSummaryResolver
                 $pluralKey = null;
                 if ($secondArgumentValue instanceof Expr\Array_) {
                     $firstItem = $secondArgumentValue->items[0] ?? null;
-                    if ($firstItem?->key instanceof Node\Scalar\String_) {
+                    if ($firstItem !== null && $firstItem->key instanceof Node\Scalar\String_) {
                         $pluralKey = $firstItem->key->value;
                     }
                 }

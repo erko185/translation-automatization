@@ -297,7 +297,7 @@ class CheckTranslationsDeepCommand extends Command
 
     private function shortenPath(string $path): string
     {
-        if (str_starts_with($path, './')) {
+        if (strpos($path, './') === 0) {
             return $path;
         }
 
