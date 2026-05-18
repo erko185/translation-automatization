@@ -16,7 +16,7 @@ class TranslatorCommand extends Command
     {
         $this->setName('translate')
             ->setDescription('Creates new language version of translated texts')
-            ->addArgument('config', InputArgument::REQUIRED, 'Path to config file. Instance of ' . TranslatorConfig::class  . ' have to be returned')
+            ->addArgument('config', InputArgument::REQUIRED, 'Path to config file. Instance of ' . TranslatorConfig::class . ' have to be returned')
             ->addOption('params', null, InputOption::VALUE_REQUIRED, 'Params for config in format a=b&c=d');
     }
 

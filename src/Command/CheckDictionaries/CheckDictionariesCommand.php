@@ -3,10 +3,8 @@
 namespace Efabrica\TranslationsAutomatization\Command\CheckDictionaries;
 
 use Efabrica\TranslationsAutomatization\Exception\InvalidConfigInstanceReturnedException;
-use Efabrica\TranslationsAutomatization\Tokenizer\Token;
 use InvalidArgumentException;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -18,7 +16,7 @@ class CheckDictionariesCommand extends Command
     {
         $this->setName('check:dictionaries')
             ->setDescription('Compare all dictionaries for all languages if there are all translation keys in all of them')
-            ->addArgument('config', InputArgument::REQUIRED, 'Path to config file. Instance of ' . CheckDictionariesConfig::class  . ' have to be returned')
+            ->addArgument('config', InputArgument::REQUIRED, 'Path to config file. Instance of ' . CheckDictionariesConfig::class . ' have to be returned')
             ->addOption('params', null, InputOption::VALUE_REQUIRED, 'Params for config in format --params="a=b&c=d"');
     }
 

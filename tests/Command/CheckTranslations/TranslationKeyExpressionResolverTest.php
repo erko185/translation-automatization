@@ -65,7 +65,7 @@ class TranslationKeyExpressionResolverTest extends TestCase
     public function testResolveNestedTransMethodCall(): void
     {
         $result = $this->resolver->resolve(
-            $this->parseExpression('$this->trans("onair.app.admin_module.grids.show_collection_grid.hidden")')
+            $this->parseExpression('$this->translate("onair.app.admin_module.grids.show_collection_grid.hidden")')
         );
 
         $this->assertTrue($result->isResolved());
@@ -75,7 +75,7 @@ class TranslationKeyExpressionResolverTest extends TestCase
     public function testResolveClassConstantFetch(): void
     {
         $result = $this->resolver
-            ->withClassConstants(['MENU_TITLE' => 'program.template.title'])
+            ->withClassConstants(['MENU_TITLE' => ExpressionEvaluationResult::resolved(['program.template.title'])])
             ->resolve($this->parseExpression('self::MENU_TITLE'));
 
         $this->assertTrue($result->isResolved());

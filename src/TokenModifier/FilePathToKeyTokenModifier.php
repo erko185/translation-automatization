@@ -3,7 +3,6 @@
 namespace Efabrica\TranslationsAutomatization\TokenModifier;
 
 use Efabrica\TranslationsAutomatization\Tokenizer\TokenCollection;
-use Nette\Utils\Strings;
 
 class FilePathToKeyTokenModifier implements TokenModifierInterface
 {

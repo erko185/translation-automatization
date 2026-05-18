@@ -116,8 +116,7 @@ class LatteTranslationExpressionResolver
                     $curlyBracketDepth++;
                 } elseif ($character === '}') {
                     $curlyBracketDepth--;
-                } elseif (
-                    $character === ','
+                } elseif ($character === ','
                     && $squareBracketDepth === 0
                     && $roundBracketDepth === 0
                     && $curlyBracketDepth === 0

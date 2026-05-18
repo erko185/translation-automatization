@@ -14,7 +14,7 @@ class TranslatorConfig
         $this->something[] = [
             $source,
             $target,
-            $translator
+            $translator,
         ];
         return $this;
     }

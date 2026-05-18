@@ -22,8 +22,7 @@ class ExpressionSubstitutor
      */
     private function substituteNode(Node $node, array $substitutions, ?Node $parent = null, ?string $subNodeName = null): Node
     {
-        if (
-            $node instanceof Expr\Variable
+        if ($node instanceof Expr\Variable
             && is_string($node->name)
             && isset($substitutions[$node->name])
             && $this->canSubstituteVariable($parent, $subNodeName)

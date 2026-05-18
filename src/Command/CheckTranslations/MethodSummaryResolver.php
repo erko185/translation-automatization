@@ -3,17 +3,17 @@
 namespace Efabrica\TranslationsAutomatization\Command\CheckTranslations;
 
 use PhpParser\Node;
-use PhpParser\Node\Expr;
 use PhpParser\Node\Arg;
+use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\Closure;
-use PhpParser\Node\Stmt\If_;
-use PhpParser\Node\Stmt\Foreach_;
-use PhpParser\Node\Stmt\Return_;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\StaticCall;
+use PhpParser\Node\Stmt\Foreach_;
+use PhpParser\Node\Stmt\If_;
+use PhpParser\Node\Stmt\Return_;
 
 class MethodSummaryResolver
 {
@@ -539,8 +539,7 @@ class MethodSummaryResolver
             return;
         }
 
-        if (
-            $node instanceof MethodCall
+        if ($node instanceof MethodCall
             && $node->name instanceof Node\Identifier
             && strtolower($node->name->toString()) === 'translate'
             && isset($node->args[0])
@@ -578,8 +577,7 @@ class MethodSummaryResolver
      */
     private function resolveOriginFromExpression(Expr $expression, array $constructorParameters, array $origins): ?array
     {
-        if (
-            $expression instanceof MethodCall
+        if ($expression instanceof MethodCall
             && $expression->name instanceof Node\Identifier
             && $expression->name->toString() === '__invoke'
             && $expression->var instanceof PropertyFetch
@@ -596,8 +594,7 @@ class MethodSummaryResolver
             }
         }
 
-        if (
-            $expression instanceof New_
+        if ($expression instanceof New_
             && $expression->class instanceof Node\Name
             && in_array($expression->class->toString(), ['RecursiveArrayIterator', 'RecursiveIteratorIterator'], true)
             && isset($expression->args[0])

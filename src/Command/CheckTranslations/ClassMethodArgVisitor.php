@@ -2,27 +2,27 @@
 
 namespace Efabrica\TranslationsAutomatization\Command\CheckFormKeys;
 
-use PhpParser\Node;
-use PhpParser\Node\Arg;
-use PhpParser\Node\Expr\Assign;
-use PhpParser\Node\Expr\ClosureUse;
-use PhpParser\Node\Expr\Closure;
-use PhpParser\Node\Stmt\Foreach_;
-use PhpParser\Node\Expr\MethodCall;
-use PhpParser\Node\Expr\New_;
-use PhpParser\Node\Scalar\String_;
-use PhpParser\Node\Stmt\ClassMethod;
-use PhpParser\Node\Stmt\ClassConst;
-use PhpParser\Node\Stmt\Class_;
-use PhpParser\Node\Stmt\Function_;
-use PhpParser\NodeVisitorAbstract;
 use Efabrica\TranslationsAutomatization\Command\CheckTranslations\BooleanExpressionEvaluator;
 use Efabrica\TranslationsAutomatization\Command\CheckTranslations\ExpressionEvaluationResult;
 use Efabrica\TranslationsAutomatization\Command\CheckTranslations\MethodSummaryResolver;
 use Efabrica\TranslationsAutomatization\Command\CheckTranslations\MethodTranslationCandidate;
-use Efabrica\TranslationsAutomatization\Command\CheckTranslations\TranslationKeyExpressionResolver;
 use Efabrica\TranslationsAutomatization\Command\CheckTranslations\ProjectClassIndex;
+use Efabrica\TranslationsAutomatization\Command\CheckTranslations\TranslationKeyExpressionResolver;
+use PhpParser\Node;
+use PhpParser\Node\Arg;
+use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\Closure;
+use PhpParser\Node\Expr\ClosureUse;
+use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Expr\New_;
 use PhpParser\Node\FunctionLike;
+use PhpParser\Node\Scalar\String_;
+use PhpParser\Node\Stmt\Class_;
+use PhpParser\Node\Stmt\ClassConst;
+use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\Foreach_;
+use PhpParser\Node\Stmt\Function_;
+use PhpParser\NodeVisitorAbstract;
 use PhpParser\PrettyPrinter\Standard;
 
 class ClassMethodArgVisitor extends NodeVisitorAbstract
@@ -61,8 +61,7 @@ class ClassMethodArgVisitor extends NodeVisitorAbstract
         ProjectClassIndex $classIndex,
         ?TranslationKeyExpressionResolver $expressionResolver = null,
         ?MethodSummaryResolver $methodSummaryResolver = null
-    )
-    {
+    ) {
         $this->keys = &$keys;
         $this->filePath = $filePath;
         $this->className = (string)pathinfo($filePath, PATHINFO_FILENAME);
@@ -84,8 +83,7 @@ class ClassMethodArgVisitor extends NodeVisitorAbstract
         $this->collectForeachBindings($node);
         if ($node instanceof MethodCall) {
             $firstArg = $this->findArgumentBySelector($node->args, 0);
-            if (
-                $node->name instanceof Node\Identifier &&
+            if ($node->name instanceof Node\Identifier &&
                 strtolower($node->name->toString()) === 'translate' &&
                 $firstArg !== null
             ) {

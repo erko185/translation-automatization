@@ -18,7 +18,7 @@ class ExtractorCommand extends Command
     {
         $this->setName('extract')
             ->setDescription('Finds non-translated texts, replaces them with translate tokens and store these texts to storage')
-            ->addArgument('config', InputArgument::REQUIRED, 'Path to config file. Instance of ' . ExtractorConfig::class  . ' have to be returned')
+            ->addArgument('config', InputArgument::REQUIRED, 'Path to config file. Instance of ' . ExtractorConfig::class . ' have to be returned')
             ->addOption('params', null, InputOption::VALUE_REQUIRED, 'Params for config in format --params="a=b&c=d"');
     }
 

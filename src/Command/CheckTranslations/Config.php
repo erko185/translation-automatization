@@ -12,7 +12,7 @@ return [
         'Grid' => [
             0 => [
                 'trans',
-                'global' // filter
+                'global', // filter
             ],
             1 => [
                 'dateTime', // columns
@@ -40,12 +40,12 @@ return [
                 'delete', // groupAction
                 'deleteFromRepo', // groupAction
                 'addInfo', // columns
-                'column' // sort
-            ]
+                'column', // sort
+            ],
         ],
         'Form' => [
             0 => [
-                'setRequired'
+                'setRequired',
             ],
             1 => [
                 'addText',
@@ -77,8 +77,8 @@ return [
         ],
         'Module' => [
             2 => [
-                'addResource'
-            ]
+                'addResource',
+            ],
         ],
         'Plugin' => [
             1 => [
@@ -94,32 +94,32 @@ return [
                 'StringConfigItem',
                 'DateTimeConfigItem',
                 'NumberConfigItem',
-                'ChoozerConfigItem'
+                'ChoozerConfigItem',
             ],
             2 => [
-                'dropdown'
+                'dropdown',
             ],
             3 => [
-                'dropdown'
-            ]
+                'dropdown',
+            ],
         ],
     ],
     'ALLOW_EMPTY_TRANSLATION' => [
         'Form' => [
             1 => [
                 'addSelect',
-                'addTextArea'
-            ]
+                'addTextArea',
+            ],
         ],
         'Plugin' => [
             3 => [
-                'dropdown'
-            ]
+                'dropdown',
+            ],
         ],
     ],
     'ARGPOS_CLASSES' => [
         0 => [
-            'Efabrica\WebComponent\Core\Menu\MenuItem'
-        ]
-    ]
+            'Efabrica\WebComponent\Core\Menu\MenuItem',
+        ],
+    ],
 ];

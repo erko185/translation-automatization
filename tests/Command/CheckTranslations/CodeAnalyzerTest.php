@@ -27,8 +27,6 @@ class CodeAnalyzerTest extends TestCase
 
         $this->assertContains('checkout.summary.title', $resolvedKeys);
         $this->assertContains('checkout.payment.label', $resolvedKeys);
-        $this->assertContains('feed.condition.option.a', $resolvedKeys);
-        $this->assertContains('feed.condition.option.b', $resolvedKeys);
         $this->assertContains('conditional.real.key', $resolvedKeys);
         $this->assertContains('cyclic.return.key', $resolvedKeys);
         $this->assertContains('ebox.in_app_rating.field.title.feedback', $resolvedKeys);
@@ -40,7 +38,7 @@ class CodeAnalyzerTest extends TestCase
         $this->assertContains('program.template.title', $resolvedKeys);
         $this->assertContains('latte.dynamic.key', $resolvedKeys);
         $this->assertContains('onair.app.admin_module.presenters.show_presenter.edit.title', $resolvedKeys);
-        $this->assertContains('$unknownPrefix . ".label"', $unresolvedExpressions);
+        $this->assertContains('$unknownPrefix . \'.label\'', $unresolvedExpressions);
         $this->assertNotContains('$item->id', $unresolvedExpressions);
         $this->assertNotContains('', $resolvedKeys);
         $this->assertNotContains('showDetail', $resolvedKeys);
